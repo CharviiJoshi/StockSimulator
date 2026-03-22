@@ -38,10 +38,12 @@
                     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
                 </svg>
             </button>
-            <div class="user-chip">
-                <span class="user-avatar">U</span>
-                <span class="user-name" id="home-username">Trader</span>
-            </div>
+            <a href="editprofile.html" style="text-decoration: none; color: inherit;">
+                <div class="user-chip">
+                    <span class="user-avatar" id="user-avatar">U</span>
+                    <span class="user-name" id="home-username">Trader</span>
+                </div>
+            </a>
             <a href="login.html" class="btn-logout">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
                     stroke-linejoin="round" width="16" height="16">
@@ -190,7 +192,17 @@
             document.getElementById('theme-icon-dark').classList.add('hidden');
             document.getElementById('theme-icon-light').classList.remove('hidden');
         }
-
+        // --- SYNC AVATAR FROM EDIT PROFILE ---
+    const storedAvatar = localStorage.getItem('stocksim-avatar');
+    if (storedAvatar) {
+        const avatarEl = document.getElementById('user-avatar');
+        if (avatarEl) {
+            // Swap the "U" text for your saved image
+            avatarEl.innerHTML = `<img src="${storedAvatar}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+            avatarEl.style.padding = '0'; // Ensure the image fills the circle
+            avatarEl.style.overflow = 'hidden';
+        }
+    }
         document.getElementById('theme-toggle').addEventListener('click', () => {
             const current = document.documentElement.getAttribute('data-theme');
             const next = current === 'dark' ? 'light' : 'dark';
