@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
+import { useAuth } from '../context/AuthContext';
 import '../dashboard.css';
 
 // ── INITIAL STOCK DATA ──────────────────────────────────────
@@ -108,6 +109,7 @@ const CHART_COLORS = [
 ];
 
 export default function Dashboard() {
+    const { user, logout } = useAuth();
     const [state, setState] = useState(buildInitialState);
     const [stateHistory, setStateHistory] = useState([]);
     const [activeSection, setActiveSection] = useState('overview');
@@ -418,10 +420,10 @@ export default function Dashboard() {
                         <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
                         <span>Home</span>
                     </Link>
-                    <Link to="/login" className="nav-item logout-btn">
+                    <a href="#" className="nav-item logout-btn" onClick={(e) => { e.preventDefault(); logout(); }}>
                         <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
                         <span>Log Out</span>
-                    </Link>
+                    </a>
                 </div>
             </aside>
 
