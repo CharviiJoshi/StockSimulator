@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home | StockSim</title>
+    <meta name="description" content="StockSim home — choose where to go in your portfolio simulator.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="home.css">
+</head>
+
+<body>
+
+    <!-- TOP NAV -->
+    <header class="home-nav">
+        <div class="home-logo">
+            <span class="logo-sym">◈</span> StockSim
+        </div>
+        <div class="home-nav-right">
+            <button class="theme-toggle" id="theme-toggle" title="Toggle theme">
+                <svg id="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5" />
+                    <line x1="12" y1="1" x2="12" y2="3" />
+                    <line x1="12" y1="21" x2="12" y2="23" />
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                    <line x1="1" y1="12" x2="3" y2="12" />
+                    <line x1="21" y1="12" x2="23" y2="12" />
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+                </svg>
+                <svg id="theme-icon-light" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+            </button>
+            <div class="user-chip">
+                <span class="user-avatar">U</span>
+                <span class="user-name" id="home-username">Trader</span>
+            </div>
+            <a href="login.html" class="btn-logout">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                    stroke-linejoin="round" width="16" height="16">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                    <polyline points="16 17 21 12 16 7" />
+                    <line x1="21" y1="12" x2="9" y2="12" />
+                </svg>
+                Log out
+            </a>
+        </div>
+    </header>
+
+    <!-- HERO WELCOME -->
+    <section class="home-hero">
+        <div class="home-glow home-glow-1"></div>
+        <div class="home-glow home-glow-2"></div>
+        <div class="home-hero-inner">
+            <div class="home-greeting">
+                <p class="home-day-chip">Day <span id="home-day">1</span></p>
+                <h1>Welcome back, <span class="home-username-title" id="home-username-2">Learner</span>.</h1>
+                <p class="home-subtitle">Your virtual portfolio starts at <strong>₹10,000</strong>. Pick a section below
+                    to continue.</p>
+            </div>
+            <div class="home-quick-stats">
+                <div class="hqs-card">
+                    <div class="hqs-label">Net Worth</div>
+                    <div class="hqs-value" id="hqs-nw">₹10,000.00</div>
+                </div>
+                <div class="hqs-card">
+                    <div class="hqs-label">Cash</div>
+                    <div class="hqs-value" id="hqs-cash">₹10,000.00</div>
+                </div>
+                <div class="hqs-card">
+                    <div class="hqs-label">Streak</div>
+                    <div class="hqs-value" id="hqs-streak">0 🔥</div>
+                </div>
+                <div class="hqs-card">
+                    <div class="hqs-label">Trades Made</div>
+                    <div class="hqs-value" id="hqs-trades">0</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FEATURE SELECTION GRID -->
+    <section class="home-features">
+        <h2 class="home-section-title">Where do you want to go?</h2>
+        <div class="home-grid">
+
+            <a href="dashboard.html#overview" class="home-card" data-section="overview">
+                <div class="hcard-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                </div>
+                <h3>Overview</h3>
+                <p>Net worth chart, portfolio allocation, and quick stats at a glance.</p>
+                <span class="hcard-arrow">→</span>
+            </a>
+
+            <a href="dashboard.html#trade" class="home-card home-card-accent" data-section="trade">
+                <div class="hcard-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <line x1="12" y1="1" x2="12" y2="23" />
+                        <path d="M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6" />
+                    </svg>
+                </div>
+                <h3>Trade</h3>
+                <p>Buy and sell stocks with real simulated fees. Includes market price panel.</p>
+                <span class="hcard-arrow">→</span>
+            </a>
+
+            <a href="dashboard.html#portfolio" class="home-card" data-section="portfolio">
+                <div class="hcard-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <rect x="2" y="3" width="20" height="14" rx="2" />
+                        <line x1="8" y1="21" x2="16" y2="21" />
+                        <line x1="12" y1="17" x2="12" y2="21" />
+                    </svg>
+                </div>
+                <h3>Portfolio</h3>
+                <p>View all your holdings with avg cost, market value, and unrealised P&L.</p>
+                <span class="hcard-arrow">→</span>
+            </a>
+
+            <a href="dashboard.html#ledger" class="home-card" data-section="ledger">
+                <div class="hcard-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <line x1="8" y1="6" x2="21" y2="6" />
+                        <line x1="8" y1="12" x2="21" y2="12" />
+                        <line x1="8" y1="18" x2="21" y2="18" />
+                        <line x1="3" y1="6" x2="3.01" y2="6" />
+                        <line x1="3" y1="12" x2="3.01" y2="12" />
+                        <line x1="3" y1="18" x2="3.01" y2="18" />
+                    </svg>
+                </div>
+                <h3>Ledger</h3>
+                <p>Full transaction history with undo support for every buy and sell order.</p>
+                <span class="hcard-arrow">→</span>
+            </a>
+
+            <a href="dashboard.html#heatmap" class="home-card" data-section="heatmap">
+                <div class="hcard-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <rect x="3" y="4" width="18" height="18" rx="2" />
+                        <line x1="16" y1="2" x2="16" y2="6" />
+                        <line x1="8" y1="2" x2="8" y2="6" />
+                        <line x1="3" y1="10" x2="21" y2="10" />
+                    </svg>
+                </div>
+                <h3>Heatmap</h3>
+                <p>Calendar view of daily gains and losses — spot your trading patterns.</p>
+                <span class="hcard-arrow">→</span>
+            </a>
+
+            <a href="dashboard.html#achievements" class="home-card" data-section="achievements">
+                <div class="hcard-icon-wrap">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="8" r="6" />
+                        <path d="M15.477 12.89L17 22l-5-3-5 3 1.523-9.11" />
+                    </svg>
+                </div>
+                <h3>Achievements</h3>
+                <p>14 badges to unlock. Track your profit streak and milestone progress.</p>
+                <span class="hcard-arrow">→</span>
+            </a>
+
+        </div>
+    </section>
+
+    <footer class="home-footer">
+        <span>StockSim &nbsp;·&nbsp; Virtual cash only &nbsp;·&nbsp; Not real investing advice.</span>
+    </footer>
+
+    <script>
+        // Theme persistence
+        const savedTheme = localStorage.getItem('stocksim-theme') || 'dark';
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        if (savedTheme === 'light') {
+            document.getElementById('theme-icon-dark').classList.add('hidden');
+            document.getElementById('theme-icon-light').classList.remove('hidden');
+        }
+
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const current = document.documentElement.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', next);
+            localStorage.setItem('stocksim-theme', next);
+            document.getElementById('theme-icon-dark').classList.toggle('hidden', next === 'light');
+            document.getElementById('theme-icon-light').classList.toggle('hidden', next === 'dark');
+        });
+
+        // Load username from localStorage if set
+        const storedName = localStorage.getItem('stocksim-username');
+        if (storedName) {
+            document.getElementById('home-username').textContent = storedName;
+            document.getElementById('home-username-2').textContent = storedName;
+            document.getElementById('user-avatar') && (document.getElementById('user-avatar').textContent = storedName[0].toUpperCase());
+        }
+
+        // Pull quick stats from simState if available
+        const storedState = localStorage.getItem('stocksim-state');
+        if (storedState) {
+            try {
+                const s = JSON.parse(storedState);
+                document.getElementById('home-day').textContent = s.currentDay || 1;
+                document.getElementById('hqs-cash').textContent = '₹' + Number(s.cash || 10000).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+                document.getElementById('hqs-streak').textContent = (s.currentStreak || 0) + ' 🔥';
+                document.getElementById('hqs-trades').textContent = (s.transactions || []).length;
+                // compute net worth
+                let nw = s.cash || 10000;
+                for (const [sym, h] of Object.entries(s.holdings || {})) {
+                    if (s.prices && s.prices[sym]) nw += h.shares * s.prices[sym];
+                }
+                document.getElementById('hqs-nw').textContent = '₹' + nw.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+            } catch (e) { }
+        }
+
+        // Handle hash navigation: if a home-card is clicked, store section preference
+        document.querySelectorAll('.home-card').forEach(card => {
+            card.addEventListener('click', () => {
+                localStorage.setItem('stocksim-section', card.dataset.section);
+            });
+        });
+    </script>
+
+</body>
+
+</html>
