@@ -75,10 +75,10 @@ export default function Home() {
                             </svg>
                         )}
                     </button>
-                    <div className="user-chip">
+                    <Link to="/edit-profile" className="user-chip" style={{textDecoration: 'none', color: 'inherit'}}>
                         <span className="user-avatar">{username[0].toUpperCase()}</span>
                         <span className="user-name">{username}</span>
-                    </div>
+                    </Link>
                     <Link to="/login" className="btn-logout">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
                             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />

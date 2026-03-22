@@ -19,6 +19,7 @@ export default function Login() {
             <div className="form-group">
                 <label htmlFor="password">Password</label>
                 <input type="password" id="password" name="password" placeholder="••••••••" required />
+                <Link to="/forgot-password" style={{fontSize: '0.85rem', color: '#10b981', textAlign: 'right', textDecoration: 'none', marginTop: '0.25rem', display: 'block'}}>Forgot password?</Link>
             </div>
 
             <button type="submit" className="btn-primary">Sign In</button>
