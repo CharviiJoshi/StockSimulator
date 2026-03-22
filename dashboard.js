@@ -40,6 +40,10 @@ const ACHIEVEMENTS_DEF = [
 ];
 
 // ── STATE ────────────────────────────────────────────────────
+// --- NEW BACKEND STATE ---
+let marketHistory = [];     // To store rows from your CSVs
+let currentDayIndex = 0;    // To track which row we are on in the CSV
+let selectedSymbol = "AAPL"; // Tracks which stock is currently active
 let state = buildInitialState();
 let stateHistory = [];      // for undo
 let orderType = 'BUY';
@@ -73,6 +77,31 @@ function buildInitialState() {
         currentDate:    null,
         isSimActive:    false,
     };
+}
+
+async function loadStockData(symbol) {
+    try {
+        const response = await fetch(`${symbol}.csv`);
+        if (!response.ok) throw new Error('File not found');
+        
+        const text = await response.text();
+        const rows = text.split('\n').filter(row => row.trim() !== "");
+        
+        // Yahoo/Kaggle CSV: Index 0 = Date, Index 4 = Close Price
+        // slice(2) skips the two header/description rows in your files
+        const parsedData = rows.slice(2).map(row => {
+            const cols = row.split(',');
+            return {
+                date: cols[0].trim(),
+                price: parseFloat(cols[4])
+            };
+        }).filter(item => !isNaN(item.price));
+
+        return parsedData.reverse(); // Start from oldest date (Jan 2020)
+    } catch (error) {
+        console.error(`Backend Error: Could not load ${symbol}.csv`, error);
+        return null;
+    }
 }
 
 // ── DATE LOGIC ───────────────────────────────────────────────
@@ -144,11 +173,27 @@ function advanceDay() {
     pushHistory();
     const prevNW = calcNetWorth(state);
 
-    // Randomize prices
-    for (const sym of Object.keys(state.prices)) {
-        const change = (Math.random() - 0.475) * 0.065; // slight upward bias
-        state.prevPrices[sym] = state.prices[sym];
-        state.prices[sym] = parseFloat((state.prices[sym] * (1 + change)).toFixed(2));
+   // --- REAL DATA LOGIC ---
+    if (marketHistory.length > 0) {
+        if (currentDayIndex < marketHistory.length - 1) {
+            currentDayIndex++; 
+            const currentEntry = marketHistory[currentDayIndex];
+            
+            // Sync simulation state with the CSV data
+            state.prevPrices[selectedSymbol] = state.prices[selectedSymbol];
+            state.prices[selectedSymbol] = currentEntry.price;
+            state.currentDate = currentEntry.date;
+        } else {
+            showNotification("End of historical data reached!", true);
+            return;
+        }
+    } else {
+        // Fallback: If no CSV is loaded yet, keep using random numbers
+        for (const sym of Object.keys(state.prices)) {
+            const change = (Math.random() - 0.475) * 0.065; 
+            state.prevPrices[sym] = state.prices[sym];
+            state.prices[sym] = parseFloat((state.prices[sym] * (1 + change)).toFixed(2));
+        }
     }
 
     const newNW = calcNetWorth(state);
@@ -711,7 +756,27 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btn-reset-range').addEventListener('click', resetDateRange);
 
     // Trade preview listeners
-    document.getElementById('trade-symbol').addEventListener('change', updateTradePreview);
+    document.getElementById('trade-symbol').addEventListener('change', async (e) => {
+        selectedSymbol = e.target.value;
+        
+        // Fetch data from the "backend" (your local folder)
+        const data = await loadStockData(selectedSymbol);
+        
+        if (data) {
+            marketHistory = data;
+            currentDayIndex = 0; // Reset to the first day of the CSV
+            
+            // Update the state with the first day's price and date
+            state.prices[selectedSymbol] = marketHistory[0].price;
+            state.currentDate = marketHistory[0].date;
+            
+            renderAll();
+            showNotification(`${selectedSymbol} data synced from project folder!`);
+        }
+        
+        // Keep your original preview logic working
+        updateTradePreview();
+    });
     document.getElementById('trade-qty').addEventListener('input', updateTradePreview);
 
     // Set initial buy button state
