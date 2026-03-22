@@ -1,15 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAF6tO75it0Vj4FZFOVD9vshvrQ8frYxPk",
-  authDomain: "stocksimulator-66df6.firebaseapp.com",
-  projectId: "stocksimulator-66df6",
-  storageBucket: "stocksimulator-66df6.firebasestorage.app",
-  messagingSenderId: "163426459152",
-  appId: "1:163426459152:web:b9082b4dadbc3d361a3495",
-  measurementId: "G-B0S5TMP0BR",
-};
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
