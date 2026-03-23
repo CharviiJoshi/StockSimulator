@@ -5,6 +5,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import EditProfile from './pages/EditProfile';
 import ForgotPassword from './pages/ForgotPassword';
 import './index.css';
@@ -18,6 +19,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/admin-dashboard" element={<AdminDashboard />} />
         <Route path="/edit-profile" element={<EditProfile />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
       </Routes>
