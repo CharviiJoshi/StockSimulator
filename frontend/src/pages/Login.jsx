@@ -54,7 +54,7 @@ export default function Login() {
         <form onSubmit={handleLogin} id="login-form">
             <div className="form-group">
                 <label htmlFor="email">Email Address</label>
-                <input type="email" id="email" name="email" placeholder="you@university.edu" required />
+                <input type="email" id="email" name="email" placeholder="you@gmail.com" required />
             </div>
 
             <div className="form-group">
