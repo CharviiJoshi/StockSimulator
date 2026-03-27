@@ -24,15 +24,18 @@ body {
     font-family: 'Inter', sans-serif;
     background-color: var(--bg-base);
     color: var(--text-primary);
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    min-height: 100vh;
+}
+
+#root {
+    width: 100%;
     min-height: 100vh;
 }
 
 .auth-container {
     width: 100%;
     max-width: 440px;
+    margin: 10vh auto;
     padding: 2.5rem;
     animation: fadeIn 0.5s ease-out forwards;
 }
