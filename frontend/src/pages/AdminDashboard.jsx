@@ -39,10 +39,47 @@ export default function AdminDashboard() {
     showNotification(`Initiating update for file ID: ${id}`);
   };
 
-  const handleUpload = (e) => {
+    const handleUpload = async (e) => {
     e.preventDefault();
-    showNotification('CSV File uploaded successfully and validation passed!');
+    
+    // 1. Grab the actual file from the HTML input box
+    const fileInput = e.target.querySelector('input[type="file"]');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+      showNotification('Please select a file first.', true);
+      return;
+    }
+
+    // 2. Package it into a digital envelope (FormData)
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      showNotification("Sending to Pandas Engine for validation...");
+      
+      // 3. Send the POST Request to YOUR Python server
+      const response = await fetch('http://localhost:8000/api/admin/upload-csv', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      // 4. Check if Python accepted it or if Pandas threw the 400 Error
+      if (!response.ok) {
+        throw new Error(data.detail || 'Upload failed');
+      }
+      
+      // 5. Success! The UI flashes green.
+      showNotification('CSV Validation Passed & Saved to Hard Drive!');
+      
+    } catch (error) {
+      // If Pandas raised an exception, the UI flashes red with the exact reason.
+      showNotification(`Error: ${error.message}`, true);
+    }
   };
+
 
   return (
     <div className="main-container" style={{ minHeight: '100vh', width: '100%' }}>
