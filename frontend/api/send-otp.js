@@ -1,15 +1,22 @@
 // Vercel Serverless Function — POST /api/send-otp
-// Generates a 6-digit OTP, hashes it, stores in Firestore, emails via Resend
+// Generates a 6-digit OTP, hashes it, stores in Firestore, emails via Nodemailer
 
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
-import { Resend } from 'resend'
+import nodemailer from 'nodemailer'
 import { db } from './_firebase.js'
 import {
   collection, query, where, getDocs, setDoc, doc, deleteDoc,
 } from 'firebase/firestore'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Create a reusable transporter using Gmail SMTP
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,   // your Gmail address
+    pass: process.env.GMAIL_PASS,   // your Gmail App Password (not your real password)
+  },
+})
 
 // Simple email format check
 function isValidEmail(email) {
@@ -75,10 +82,10 @@ export default async function handler(req, res) {
       attempts: 0,
     })
 
-    // --- Send email via Resend ---
-    const { error: sendError } = await resend.emails.send({
-      from: 'StockSimulator <onboarding@resend.dev>',
-      to: [email],
+    // --- Send email via Nodemailer ---
+    await transporter.sendMail({
+      from: `"StockSimulator" <${process.env.GMAIL_USER}>`,
+      to: email,
       subject: 'Password Reset OTP — Stock Simulator',
       html: `
         <div style="font-family: 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #0f172a; color: #e2e8f0; border-radius: 12px;">
@@ -92,11 +99,6 @@ export default async function handler(req, res) {
         </div>
       `,
     })
-
-    if (sendError) {
-      console.error('Resend error:', sendError)
-      return res.status(500).json({ error: 'Failed to send email. Please try again.' })
-    }
 
     return res.status(200).json({ success: true, message: 'OTP sent to your email.' })
   } catch (err) {
