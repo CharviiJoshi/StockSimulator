@@ -1,0 +1,29 @@
+{
+    "admins": [
+        {
+            "id": "1",
+            "email": "dheryamujawdiya@gmail.com",
+            "password": "12345678"
+        },
+        {
+            "id": "2",
+            "email": "charvijoshi@gmail.com",
+            "password": "12345678"
+        },
+        {
+            "id": "3",
+            "email": "ayeshaanikushwaha@gmail.com",
+            "password": "12345678"
+        },
+        {
+            "id": "4",
+            "email": "ayushsolanki@gmail.com",
+            "password": "12345678"
+        },
+        {
+            "id": "5",
+            "email": "chiraghoondlani@gmail.com",
+            "password": "12345678"
+        }
+    ]
+}
