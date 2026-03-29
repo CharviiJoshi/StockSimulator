@@ -1,77 +1,57 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
-import { createSession } from '../auth';
-import { useAuth } from '../context/AuthContext';
-import bcrypt from 'bcryptjs';
 import '../index.css';
 
 export default function Login() {
+  const [isAdminMode, setIsAdminMode] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e) => {
+  const handleLogin = (e) => {
     e.preventDefault();
-    setError('');
-    setLoading(true);
-
-    try {
-      // Query users collection for matching email
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('email', '==', email));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        setError('Invalid credentials. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Get the user document
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
-
-      // Compare entered password with stored hash
-      const isMatch = await bcrypt.compare(password, userData.password);
-
-      if (!isMatch) {
-        setError('Invalid credentials. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Login success — create session with 16-digit hex token
-      const userInfo = {
-        userId: userData.userId,
-        name: userData.name,
-        email: userData.email,
-      };
-
-      createSession(userInfo);
-      login(userInfo);
+    if (isAdminMode) {
+      navigate('/admin-dashboard');
+    } else {
       navigate('/dashboard');
-    } catch (err) {
-      console.error('Login error:', err);
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
     <div className="auth-container">
-        <div className="auth-header">
+        <div className="auth-header" style={{ marginBottom: '1rem' }}>
             <h1>Stock Simulator</h1>
-            <p>Welcome back! Sign in to your account.</p>
+            <p>Welcome back! Sign in to your {isAdminMode ? 'Admin' : 'User'} account.</p>
         </div>
 
-        <form onSubmit={handleSubmit} id="login-form">
-            {error && <div className="error-message">{error}</div>}
+        <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem', justifyContent: 'center' }}>
+            <button 
+                type="button"
+                onClick={() => setIsAdminMode(false)}
+                style={{
+                    background: !isAdminMode ? '#10b981' : 'transparent',
+                    color: !isAdminMode ? '#fff' : '#94a3b8',
+                    border: '1px solid #10b981',
+                    padding: '0.5rem 1.5rem',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                }}>
+                User Login
+            </button>
+            <button 
+                type="button"
+                onClick={() => setIsAdminMode(true)}
+                style={{
+                    background: isAdminMode ? '#3b82f6' : 'transparent',
+                    color: isAdminMode ? '#fff' : '#94a3b8',
+                    border: '1px solid #3b82f6',
+                    padding: '0.5rem 1.5rem',
+                    borderRadius: '4px',
+                    cursor: 'pointer'
+                }}>
+                Admin Login
+            </button>
+        </div>
+
+        <form onSubmit={handleLogin} id="login-form">
             <div className="form-group">
                 <label htmlFor="email">Email Address</label>
                 <input
@@ -99,8 +79,8 @@ export default function Login() {
                 <Link to="/forgot-password" style={{fontSize: '0.85rem', color: '#10b981', textAlign: 'right', textDecoration: 'none', marginTop: '0.25rem', display: 'block'}}>Forgot password?</Link>
             </div>
 
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Signing In...' : 'Sign In'}
+            <button type="submit" className="btn-primary" style={{ background: isAdminMode ? '#3b82f6' : '#10b981' }}>
+              Sign In {isAdminMode && 'as Admin'}
             </button>
         </form>
 
