@@ -1,21 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
+import { useAuth } from '../context/AuthContext';
 import '../dashboard.css';
 
 // ── INITIAL STOCK DATA ──────────────────────────────────────
-const STOCKS = {
-    AAPL:  { name: "Apple Inc.",       price: 178.50  },
-    TSLA:  { name: "Tesla Inc.",       price: 245.30  },
-    NVDA:  { name: "NVIDIA Corp.",     price: 485.80  },
-    MSFT:  { name: "Microsoft Corp.",  price: 375.20  },
-    GOOGL: { name: "Alphabet Inc.",    price: 140.60  },
-    AMZN:  { name: "Amazon.com",       price: 175.40  },
-    META:  { name: "Meta Platforms",   price: 318.90  },
-    NFLX:  { name: "Netflix Inc.",     price: 432.10  },
-    AMD:   { name: "AMD Inc.",         price: 156.30  },
-    PYPL:  { name: "PayPal Holdings",  price: 64.20   },
-};
+let STOCKS = {};
 
 const FEE_RATE   = 0.005; // 0.5% per trade
 const START_CASH = 10000; // ₹10,000 starting cash
@@ -108,6 +98,7 @@ const CHART_COLORS = [
 ];
 
 export default function Dashboard() {
+    const { user, logout } = useAuth();
     const [state, setState] = useState(buildInitialState);
     const [stateHistory, setStateHistory] = useState([]);
     const [activeSection, setActiveSection] = useState('overview');
@@ -126,6 +117,20 @@ export default function Dashboard() {
     const [simEndDate, setSimEndDate] = useState('');
     const [simWarn, setSimWarn] = useState('');
     const [tradeWarn, setTradeWarn] = useState('');
+
+        useEffect(() => {
+        // Force React to ask Python for the real 2020 CSV data on load
+        fetch('http://localhost:8000/api/available-assets')
+            .then(res => res.json())
+            .then(realAssets => {
+                // Overwrite the global STOCKS variable with your Python data
+                STOCKS = realAssets;
+                // Force the screen to redraw with the new prices and new drop-down stocks
+                setState(buildInitialState());
+            })
+            .catch(err => console.error("Failed to load real market data:", err));
+    }, []);
+
 
     const nwChartRef = useRef(null);
     const allocChartRef = useRef(null);
@@ -418,10 +423,10 @@ export default function Dashboard() {
                         <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
                         <span>Home</span>
                     </Link>
-                    <Link to="/login" className="nav-item logout-btn">
+                    <a href="#" className="nav-item logout-btn" onClick={(e) => { e.preventDefault(); logout(); }}>
                         <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
                         <span>Log Out</span>
-                    </Link>
+                    </a>
                 </div>
             </aside>
 
@@ -527,11 +532,11 @@ export default function Dashboard() {
                         <div className="date-selection-group" style={{display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap'}}>
                             <div className="form-row" style={{flex: 1, minWidth: '200px', marginBottom: 0}}>
                                 <label>Start Date</label>
-                                <input type="date" className="trade-input" value={simStartDate} onChange={e => setSimStartDate(e.target.value)} />
+                                <input type="date" className="trade-input" value={simStartDate} min="2020-01-01" max="2026-03-19" onChange={e => setSimStartDate(e.target.value)} />
                             </div>
                             <div className="form-row" style={{flex: 1, minWidth: '200px', marginBottom: 0}}>
                                 <label>End Date</label>
-                                <input type="date" className="trade-input" value={simEndDate} onChange={e => setSimEndDate(e.target.value)} />
+                                <input type="date" className="trade-input" value={simEndDate} min="2020-01-01" max="2026-03-19" onChange={e => setSimEndDate(e.target.value)} />
                             </div>
                             <button className="btn-execute" onClick={startSimulation} style={{width: 'auto', padding: '0.75rem 2rem'}}>Start Simulation</button>
                         </div>

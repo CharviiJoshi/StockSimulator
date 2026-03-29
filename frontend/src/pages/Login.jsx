@@ -4,6 +4,8 @@ import '../index.css';
 
 export default function Login() {
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const navigate = useNavigate();
 
   const handleLogin = (e) => {
@@ -54,12 +56,28 @@ export default function Login() {
         <form onSubmit={handleLogin} id="login-form">
             <div className="form-group">
                 <label htmlFor="email">Email Address</label>
-                <input type="email" id="email" name="email" placeholder="you@gmail.com" required />
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  placeholder="you@university.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
             </div>
 
             <div className="form-group">
                 <label htmlFor="password">Password</label>
-                <input type="password" id="password" name="password" placeholder="••••••••" required />
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
                 <Link to="/forgot-password" style={{fontSize: '0.85rem', color: '#10b981', textAlign: 'right', textDecoration: 'none', marginTop: '0.25rem', display: 'block'}}>Forgot password?</Link>
             </div>
 
