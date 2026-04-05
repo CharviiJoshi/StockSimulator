@@ -9,6 +9,9 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Body, BackgroundTa
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Dict, List, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
@@ -30,8 +33,8 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 otp_storage: Dict[str, str] = {}
 
 # Gmail Configuration (Ideally from .env)
-GMAIL_USER = "technicalreport24@gmail.com"
-GMAIL_PASS = "ibtj itoi mpfj aysh"
+GMAIL_USER = os.getenv("GMAIL_USER", "technicalreport24@gmail.com")
+GMAIL_PASS = os.getenv("GMAIL_PASS", "ibtj itoi mpfj aysh")
 
 class OTPRequest(BaseModel):
     email: str
