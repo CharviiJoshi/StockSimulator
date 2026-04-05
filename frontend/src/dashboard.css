@@ -601,11 +601,11 @@ body {
 .hl-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: var(--text-muted); }
 .hl-box { width: 12px; height: 12px; border-radius: 3px; }
 
-.hl-box.loss-3 { background: #7f1d1d; }
-.hl-box.loss-1 { background: #991b1b; }
-.hl-box.neutral { background: #1e293b; }
-.hl-box.gain-1 { background: #065f46; }
-.hl-box.gain-3 { background: #047857; }
+.hl-box.loss-3 { background: #ff4d4d; }
+.hl-box.loss-1 { background: #ff4d4d44; }
+.hl-box.neutral { background: #334155; }
+.hl-box.gain-1 { background: #00e67644; }
+.hl-box.gain-3 { background: #00e676; }
 
 .heatmap-grid {
     display: flex;
@@ -636,12 +636,12 @@ body {
 }
 
 .hmap-cell.neutral { background: #1e293b; }
-.hmap-cell.loss-1  { background: #7f1d1d44; border-color: #991b1b44; }
-.hmap-cell.loss-2  { background: #991b1b99; border-color: #991b1b; }
-.hmap-cell.loss-3  { background: #b91c1c; border-color: #dc2626; color: rgba(255,255,255,0.8); }
-.hmap-cell.gain-1  { background: #064e3b44; border-color: #065f4644; }
-.hmap-cell.gain-2  { background: #065f4699; border-color: #065f46; }
-.hmap-cell.gain-3  { background: #047857; border-color: #10b981; color: rgba(255,255,255,0.8); }
+.hmap-cell.loss-1  { background: rgba(244, 63, 94, 0.15); border-color: rgba(244, 63, 94, 0.3); }
+.hmap-cell.loss-2  { background: rgba(244, 63, 94, 0.4); border-color: rgba(244, 63, 94, 0.6); }
+.hmap-cell.loss-3  { background: #f43f5e; border-color: #fb7185; color: white; box-shadow: 0 0 10px rgba(244, 63, 94, 0.3); }
+.hmap-cell.gain-1  { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); }
+.hmap-cell.gain-2  { background: rgba(16, 185, 129, 0.4); border-color: rgba(16, 185, 129, 0.6); }
+.hmap-cell.gain-3  { background: #10b981; border-color: #34d399; color: white; box-shadow: 0 0 10px rgba(16, 185, 129, 0.3); }
 
 .heatmap-note { font-size: 0.78rem; color: var(--text-subtle); }
 
@@ -769,20 +769,20 @@ body {
     background: var(--input-bg);
 }
 
-[data-theme="light"] .hmap-cell.neutral { background: #e2e8f0; border-color: #cbd5e1; }
-[data-theme="light"] .hmap-cell { color: rgba(0,0,0,0.4); }
-[data-theme="light"] .hmap-cell.loss-1  { background: #fecacaaa; border-color: #fca5a5; }
-[data-theme="light"] .hmap-cell.loss-2  { background: #fca5a5cc; border-color: #f87171; }
-[data-theme="light"] .hmap-cell.loss-3  { background: #ef4444; border-color: #dc2626; color: white; }
-[data-theme="light"] .hmap-cell.gain-1  { background: #bbf7d0aa; border-color: #86efac; }
-[data-theme="light"] .hmap-cell.gain-2  { background: #86efaccc; border-color: #4ade80; }
-[data-theme="light"] .hmap-cell.gain-3  { background: #22c55e; border-color: #16a34a; color: white; }
+[data-theme="light"] .hmap-cell.neutral { background: #f1f5f9; border-color: #e2e8f0; }
+[data-theme="light"] .hmap-cell { color: rgba(15, 23, 42, 0.4); }
+[data-theme="light"] .hmap-cell.loss-1  { background: #fff1f2; border-color: #fecdd3; }
+[data-theme="light"] .hmap-cell.loss-2  { background: #fda4af; border-color: #fb7185; }
+[data-theme="light"] .hmap-cell.loss-3  { background: #f43f5e; border-color: #e11d48; color: white; }
+[data-theme="light"] .hmap-cell.gain-1  { background: #f0fdf4; border-color: #dcfce7; }
+[data-theme="light"] .hmap-cell.gain-2  { background: #86efac; border-color: #4ade80; }
+[data-theme="light"] .hmap-cell.gain-3  { background: #10b981; border-color: #059669; color: white; }
 
-[data-theme="light"] .hl-box.neutral { background: #e2e8f0; }
-[data-theme="light"] .hl-box.loss-1 { background: #fca5a5; }
-[data-theme="light"] .hl-box.loss-3 { background: #ef4444; }
+[data-theme="light"] .hl-box.neutral { background: #f1f5f9; }
+[data-theme="light"] .hl-box.loss-1 { background: #fda4af; }
+[data-theme="light"] .hl-box.loss-3 { background: #f43f5e; }
 [data-theme="light"] .hl-box.gain-1 { background: #86efac; }
-[data-theme="light"] .hl-box.gain-3 { background: #22c55e; }
+[data-theme="light"] .hl-box.gain-3 { background: #10b981; }
 
 [data-theme="light"] .hmap-tooltip { background: var(--surface); border-color: var(--border-bright); color: var(--text); }
 [data-theme="light"] .btn-theme-toggle { background: rgba(0,0,0,0.04); }

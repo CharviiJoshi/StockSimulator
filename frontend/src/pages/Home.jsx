@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import '../home.css';
 
 export default function Home() {
     const navigate = useNavigate();
+    const { user } = useAuth();
     const [theme, setTheme] = useState(localStorage.getItem('stocksim-theme') || 'dark');
-    const [username, setUsername] = useState('Learner');
+    const [username, setUsername] = useState(user?.name || 'Learner');
     const [stats, setStats] = useState({
         day: 1,
         cash: 10000,
@@ -20,27 +24,44 @@ export default function Home() {
     }, [theme]);
 
     useEffect(() => {
-        const storedName = localStorage.getItem('stocksim-username');
-        if (storedName) setUsername(storedName);
-
-        const storedState = localStorage.getItem('stocksim-state');
-        if (storedState) {
-            try {
-                const s = JSON.parse(storedState);
-                let currentNw = s.cash || 10000;
-                for (const [sym, h] of Object.entries(s.holdings || {})) {
-                    if (s.prices && s.prices[sym]) currentNw += h.shares * s.prices[sym];
-                }
-                setStats({
-                    day: s.currentDay || 1,
-                    cash: s.cash || 10000,
-                    streak: s.currentStreak || 0,
-                    trades: (s.transactions || []).length,
-                    nw: currentNw
-                });
-            } catch (e) {}
+        if (user && user.role === 'admin') {
+            navigate('/admin-dashboard');
+            return;
         }
-    }, []);
+
+        if (user && user.userId) {
+            setUsername(user.name);
+            
+            const fetchStats = async () => {
+                const userRef = doc(db, 'users', String(user.userId));
+                const snap = await getDoc(userRef);
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (data.simState) {
+                        const s = data.simState;
+                        // For trades, we can calculate from simState or better yet, just show the count if stored
+                        setStats({
+                            day: s.currentDay || 1,
+                            cash: s.cash || 10000,
+                            streak: s.currentStreak || 0,
+                            trades: s.tradeCount || 0,
+                            nw: s.cash // Simple fallback, full calc not needed for quick hero stats if we store NW
+                        });
+                        
+                        // Recalculate NW more accurately if prices are available
+                        if (s.prices) {
+                            let currentNw = s.cash || 10000;
+                            for (const [sym, h] of Object.entries(s.holdings || {})) {
+                                if (s.prices[sym]) currentNw += h.shares * s.prices[sym];
+                            }
+                            setStats(prev => ({ ...prev, nw: currentNw }));
+                        }
+                    }
+                }
+            };
+            fetchStats();
+        }
+    }, [user]);
 
     const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 

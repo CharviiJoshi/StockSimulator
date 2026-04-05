@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, addDoc, orderBy } from 'firebase/firestore';
+import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
 import '../dashboard.css';
 
@@ -83,10 +85,12 @@ function formatDateDisplay(dateStr) {
 }
 
 function fmt(n, decimals = 2) {
+    if (n === null || n === undefined || isNaN(n) || n === 0) return "NA";
     return CURRENCY + Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 function fmtSigned(n) {
+    if (n === null || n === undefined || isNaN(n) || n === 0) return "NA";
     return (n >= 0 ? '+' : '−') + fmt(Math.abs(n));
 }
 
@@ -117,19 +121,78 @@ export default function Dashboard() {
     const [simEndDate, setSimEndDate] = useState('');
     const [simWarn, setSimWarn] = useState('');
     const [tradeWarn, setTradeWarn] = useState('');
+    const [marketRange, setMarketRange] = useState({ min: "2020-01-01", max: "2026-03-19" });
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
 
-        useEffect(() => {
-        // Force React to ask Python for the real 2020 CSV data on load
-        fetch('http://localhost:8000/api/available-assets')
-            .then(res => res.json())
-            .then(realAssets => {
-                // Overwrite the global STOCKS variable with your Python data
+    const fetchPricesForDate = async (dateStr) => {
+        try {
+            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/historical-prices?date=${dateStr}`);
+            const prices = await res.json();
+            return prices;
+        } catch (err) {
+            console.error("Failed to fetch historical prices:", err);
+            return null;
+        }
+    };
+
+    useEffect(() => {
+        const initDashboard = async () => {
+            try {
+                // 1. Fetch market date range
+                const rangeRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/market-range`);
+                const range = await rangeRes.json();
+                setMarketRange(range);
+                setSimStartDate(range.min);
+                setSimEndDate(range.max);
+
+                // 2. Fetch real assets (symbols)
+                const assetsRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/available-assets`);
+                const realAssets = await assetsRes.json();
                 STOCKS = realAssets;
-                // Force the screen to redraw with the new prices and new drop-down stocks
-                setState(buildInitialState());
-            })
-            .catch(err => console.error("Failed to load real market data:", err));
-    }, []);
+                const symbols = Object.keys(realAssets);
+                if (symbols.length > 0 && !symbols.includes(tradeSymbol)) {
+                    setTradeSymbol(symbols[0]);
+                }
+
+                // 3. Load user-specific simulation state from Firestore
+                if (user && user.userId) {
+                    const userRef = doc(db, 'users', String(user.userId));
+                    const userSnap = await getDoc(userRef);
+                    
+                    if (userSnap.exists()) {
+                        const data = userSnap.data();
+                        if (data.simState) {
+                            const tradesRef = collection(db, 'users', String(user.userId), 'transactions');
+                            const tradesSnap = await getDocs(tradesRef);
+                            const transactions = tradesSnap.docs
+                                .map(d => d.data())
+                                .sort((a, b) => {
+                                    if (a.day !== b.day) return a.day - b.day;
+                                    return new Date(a.timestamp) - new Date(b.timestamp);
+                                });
+                            
+                            setState(prev => ({
+                                ...prev,
+                                ...data.simState,
+                                transactions: transactions
+                            }));
+                        } else {
+                            // First time user, set initial prices from the range's start
+                            const initialPrices = await fetchPricesForDate(range.min);
+                            if (initialPrices) {
+                                setState(prev => ({ ...prev, prices: initialPrices, prevPrices: initialPrices }));
+                            }
+                        }
+                    }
+                }
+                setIsDataLoaded(true);
+            } catch (err) {
+                console.error("Dashboard initialization error:", err);
+            }
+        };
+
+        if (user) initDashboard();
+    }, [user]);
 
 
     const nwChartRef = useRef(null);
@@ -165,26 +228,33 @@ export default function Dashboard() {
         });
     };
 
-    const advanceDay = () => {
+    const advanceDay = async () => {
+        if (!isDataLoaded) return;
         let newState = deepClone(state);
+        let nextDate = newState.currentDate;
         
         if (newState.isSimActive && newState.currentDate) {
             if (newState.currentDate >= newState.simEndDate) {
                 showNotification('Simulation ended! You reached your selected end date.', true);
                 return;
             }
-            newState.currentDate = advanceDateStr(newState.currentDate);
+            nextDate = advanceDateStr(newState.currentDate);
+        }
+
+        const newPrices = await fetchPricesForDate(nextDate || marketRange.min);
+        if (!newPrices) {
+            showNotification('Could not fetch market data for the next day.', true);
+            return;
         }
 
         pushHistory(state);
 
         const prevNW = calcNetWorth(newState);
-        // Randomize prices
-        for (const sym of Object.keys(newState.prices)) {
-            const change = (Math.random() - 0.475) * 0.065; // slight upward bias
-            newState.prevPrices[sym] = newState.prices[sym];
-            newState.prices[sym] = parseFloat((newState.prices[sym] * (1 + change)).toFixed(2));
-        }
+        
+        // Use real prices from CSV
+        newState.prevPrices = { ...newState.prices };
+        newState.prices = newPrices;
+        newState.currentDate = nextDate;
 
         const newNW = calcNetWorth(newState);
         const dayPnl = parseFloat((newNW - prevNW).toFixed(2));
@@ -206,6 +276,14 @@ export default function Dashboard() {
 
         checkAchievements(newState);
         setState(newState);
+        
+        // Persist to Firestore
+        if (user && user.userId && isDataLoaded) {
+            const userRef = doc(db, 'users', String(user.userId));
+            const { transactions, ...persistState } = newState;
+            persistState.tradeCount = transactions.filter(t => !t.isUndone).length;
+            updateDoc(userRef, { simState: persistState });
+        }
 
         const dateStr = newState.isSimActive ? formatDateDisplay(newState.currentDate) : `Day ${newState.currentDay}`;
         const msg = dayPnl >= 0
@@ -214,7 +292,7 @@ export default function Dashboard() {
         showNotification(msg, dayPnl < 0);
     };
 
-    const startSimulation = () => {
+    const startSimulation = async () => {
         if (!simStartDate || !simEndDate) {
             setSimWarn("Please select both start and end dates.");
             return;
@@ -231,14 +309,21 @@ export default function Dashboard() {
             return;
         }
 
-        let freshState = buildInitialState();
-        freshState.simStartDate = simStartDate;
-        freshState.simEndDate   = simEndDate;
-        freshState.currentDate  = simStartDate;
-        freshState.isSimActive  = true;
+        const initialPrices = await fetchPricesForDate(simStartDate);
+        if (!initialPrices) {
+            setSimWarn("Could not fetch market data for the selected start date.");
+            return;
+        }
 
-        setStateHistory([]);
-        setState(freshState);
+        setState(prev => ({
+            ...prev,
+            simStartDate,
+            simEndDate,
+            currentDate: simStartDate,
+            prices: initialPrices,
+            prevPrices: initialPrices,
+            isSimActive: true
+        }));
         setSimWarn("Simulation started successfully!");
         setChartFromDay(0);
         setChartToDay(null);
@@ -284,31 +369,78 @@ export default function Dashboard() {
             if (h.shares === 0) delete newState.holdings[tradeSymbol];
         }
 
-        newState.transactions.push({
+        const transaction = {
             id:    newState.transactions.length + 1,
             day:   newState.currentDay,
+            simDate: newState.currentDate, // Record current simulation date
             type:  orderType,
             sym:   tradeSymbol,
             qty:   tradeQty,
             price: parseFloat(price.toFixed(2)),
             fee,
             total: orderType === 'BUY' ? -(cost + fee) : (cost - fee),
-        });
+            timestamp: new Date().toISOString(),
+            isUndone: false
+        };
+
+        newState.transactions.push(transaction);
         newState.totalFees = parseFloat((newState.totalFees + fee).toFixed(2));
         setTradeWarn('');
         setTradeQty(1);
 
         checkAchievements(newState);
         setState(newState);
+        
+        // Persist to Firestore
+        if (user && user.userId && isDataLoaded) {
+            const userRef = doc(db, 'users', String(user.userId));
+            const { transactions, ...persistState } = newState;
+            persistState.tradeCount = transactions.filter(t => !t.isUndone).length;
+            updateDoc(userRef, { simState: persistState });
+            
+            // Add transaction to subcollection
+            const tradesRef = collection(db, 'users', String(user.userId), 'transactions');
+            addDoc(tradesRef, transaction);
+        }
+
         showNotification(`✅ ${orderType} ${tradeQty} × ${tradeSymbol} @ ${fmt(price)} — Fee: ${fmt(fee)}`);
     };
 
-    const undoLast = () => {
+    const undoLast = async () => {
         if (stateHistory.length === 0) return;
         const prev = stateHistory[stateHistory.length - 1];
-        setState(prev);
+        
+        // Soft undo: Mark the last transaction as Undone instead of deleting it
+        let newState = deepClone(prev);
+        const lastTxIdx = state.transactions.length - 1;
+        if (lastTxIdx >= 0) {
+            const lastTx = state.transactions[lastTxIdx];
+            // Update the transactions list to include a copy of the transactions from 'state' but with the last one marked undone
+            newState.transactions = state.transactions.map((t, i) => i === lastTxIdx ? { ...t, isUndone: true } : t);
+            
+            // Sync with Firestore
+            if (user && user.userId) {
+                const tradesRef = collection(db, 'users', String(user.userId), 'transactions');
+                const q = query(tradesRef, where('id', '==', lastTx.id));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    await updateDoc(doc(db, 'users', String(user.userId), 'transactions', snap.docs[0].id), { isUndone: true });
+                }
+            }
+        }
+
+        setState(newState);
         setStateHistory(h => h.slice(0, h.length - 1));
-        showNotification('↩ Last action undone.');
+        
+        // Persist the state (cash/holdings) back to Firestore
+        if (user && user.userId) {
+            const userRef = doc(db, 'users', String(user.userId));
+            const { transactions, ...persistState } = newState;
+            persistState.tradeCount = transactions.filter(t => !t.isUndone).length;
+            updateDoc(userRef, { simState: persistState });
+        }
+
+        showNotification('↩ Last action undone and recorded.');
     };
 
     const checkAchievements = (s) => {
@@ -395,6 +527,16 @@ export default function Dashboard() {
         return items;
     };
 
+    if (!isDataLoaded) {
+        return (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+                <div className="spinner" style={{ width: '40px', height: '40px', border: '3px solid rgba(6, 182, 212, 0.2)', borderTopColor: 'var(--accent-cyan)', borderRadius: '50%', animation: 'spin 1s linear infinite', marginBottom: '1rem' }}></div>
+                <p style={{ fontWeight: 500, letterSpacing: '0.05em' }}>SYNCING MARKET DATA...</p>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+        );
+    }
+
     return (
         <div className="main-container" style={{display: 'flex', minHeight: '100vh', width: '100%'}}>
             {/* SIDEBAR */}
@@ -419,10 +561,12 @@ export default function Dashboard() {
                     ))}
                 </nav>
                 <div className="sidebar-footer">
-                    <Link to="/home" className="nav-item home-btn">
-                        <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
-                        <span>Home</span>
-                    </Link>
+                    {user?.role !== 'admin' && (
+                        <Link to="/home" className="nav-item home-btn">
+                            <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+                            <span>Home</span>
+                        </Link>
+                    )}
                     <a href="#" className="nav-item logout-btn" onClick={(e) => { e.preventDefault(); logout(); }}>
                         <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
                         <span>Log Out</span>
@@ -532,11 +676,11 @@ export default function Dashboard() {
                         <div className="date-selection-group" style={{display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap'}}>
                             <div className="form-row" style={{flex: 1, minWidth: '200px', marginBottom: 0}}>
                                 <label>Start Date</label>
-                                <input type="date" className="trade-input" value={simStartDate} min="2020-01-01" max="2026-03-19" onChange={e => setSimStartDate(e.target.value)} />
+                                <input type="date" className="trade-input" value={simStartDate} min={marketRange.min} max={new Date().toISOString().split('T')[0]} onChange={e => setSimStartDate(e.target.value)} />
                             </div>
                             <div className="form-row" style={{flex: 1, minWidth: '200px', marginBottom: 0}}>
                                 <label>End Date</label>
-                                <input type="date" className="trade-input" value={simEndDate} min="2020-01-01" max="2026-03-19" onChange={e => setSimEndDate(e.target.value)} />
+                                <input type="date" className="trade-input" value={simEndDate} min={marketRange.min} max={new Date().toISOString().split('T')[0]} onChange={e => setSimEndDate(e.target.value)} />
                             </div>
                             <button className="btn-execute" onClick={startSimulation} style={{width: 'auto', padding: '0.75rem 2rem'}}>Start Simulation</button>
                         </div>
@@ -584,14 +728,20 @@ export default function Dashboard() {
                                     {Object.entries(STOCKS).map(([sym, _]) => {
                                         const cur = state.prices[sym];
                                         const prev = state.prevPrices[sym];
-                                        const chg = cur - prev;
-                                        const pct = ((chg / prev) * 100).toFixed(2);
+                                        
+                                        // If price is missing (NA), show NA instead of calculation
+                                        const hasData = cur !== undefined && cur !== null && cur !== 0;
+                                        const chg = hasData ? (cur - (prev || cur)) : 0;
+                                        const pct = (hasData && prev) ? ((chg / prev) * 100).toFixed(2) : "0.00";
                                         const held = state.holdings[sym]?.shares || 0;
+                                        
                                         return (
                                             <tr key={sym}>
                                                 <td className="ticker-cell">{sym}</td>
-                                                <td>{fmt(cur)}</td>
-                                                <td className={chg >= 0 ? 'up' : 'down'}>{chg >= 0 ? '+' : ''}{pct}%</td>
+                                                <td>{hasData ? fmt(cur) : "NA"}</td>
+                                                <td className={hasData ? (chg >= 0 ? 'up' : 'down') : ''}>
+                                                    {hasData ? (chg >= 0 ? '+' : '') + pct + '%' : "NA"}
+                                                </td>
                                                 <td>{held > 0 ? `${held} shares` : '—'}</td>
                                             </tr>
                                         )
@@ -643,19 +793,25 @@ export default function Dashboard() {
                             <h3>Trade History</h3>
                             <button className="btn-undo-ledger" onClick={undoLast} disabled={stateHistory.length === 0}>↩ Undo Last Trade</button>
                         </div>
-                        <table className="ledger-table">
-                            <thead><tr><th>#</th><th>Day</th><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Fee</th><th>Total</th></tr></thead>
-                            <tbody>
-                                {state.transactions.length === 0 ? <tr className="empty-row"><td colSpan="8">No transactions yet.</td></tr> :
-                                 [...state.transactions].reverse().map(t => (
-                                    <tr key={t.id}>
-                                        <td>{t.id}</td><td>Day {t.day}</td><td className={`ledger-${t.type.toLowerCase()}`}>{t.type}</td>
-                                        <td className="ticker-cell">{t.sym}</td><td>{t.qty}</td><td>{fmt(t.price)}</td><td>{fmt(t.fee)}</td>
-                                        <td className={t.total < 0 ? 'down' : 'up'}>{fmtSigned(t.total)}</td>
-                                    </tr>
-                                 ))}
-                            </tbody>
-                        </table>
+                                <table className="ledger-table">
+                                    <thead><tr><th>#</th><th>Day</th><th>Date</th><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Fee</th><th>Total</th></tr></thead>
+                                    <tbody>
+                                        {state.transactions.length === 0 ? <tr className="empty-row"><td colSpan="9">No transactions yet.</td></tr> :
+                                         [...state.transactions].reverse().map(t => (
+                                            <tr key={t.id} style={t.isUndone ? { opacity: 0.5, textDecoration: 'line-through' } : {}}>
+                                                <td>{t.id}</td>
+                                                <td>Day {t.day}</td>
+                                                <td style={{fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)'}}>{formatDateDisplay(t.simDate)}</td>
+                                                <td className={`ledger-${t.type.toLowerCase()}`}>{t.isUndone ? 'UNDONE' : t.type}</td>
+                                                <td className="ticker-cell">{t.sym}</td>
+                                                <td>{t.qty}</td>
+                                                <td>{fmt(t.price)}</td>
+                                                <td>{fmt(t.fee)}</td>
+                                                <td className={t.total < 0 ? 'down' : 'up'}>{fmtSigned(t.total)}</td>
+                                            </tr>
+                                         ))}
+                                    </tbody>
+                                </table>
                     </div>
                 </section>
 

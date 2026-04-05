@@ -12,18 +12,25 @@ import ForgotPassword from './pages/ForgotPassword';
 import './index.css';
 
 function App() {
+  React.useEffect(() => {
+    const savedTheme = localStorage.getItem('stocksim-theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }, []);
+
   return (
     <Router>
-      <Routes>
-        <Route path="/" element={<Landing />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/admin-dashboard" element={<AdminDashboard />} />
-        <Route path="/edit-profile" element={<EditProfile />} />
-        <Route path="/forgot-password" element={<ForgotPassword />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<Landing />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/admin-dashboard" element={<AdminDashboard />} />
+          <Route path="/edit-profile" element={<EditProfile />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+        </Routes>
+      </AuthProvider>
     </Router>
   );
 }

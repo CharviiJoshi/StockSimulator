@@ -18,6 +18,8 @@ export default function ForgotPassword() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // ─── STEP 1: Send OTP via server ───────────────────────
   const handleSendOtp = async (e) => {
@@ -27,7 +29,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/send-otp', {
+      const response = await fetch('http://localhost:8000/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -67,7 +69,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/verify-otp', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp: otpInput }),
@@ -188,6 +190,7 @@ export default function ForgotPassword() {
                 fontSize: '1.5rem',
                 letterSpacing: '8px',
                 fontWeight: '700',
+                color: 'var(--text-primary)'
               }}
             />
           </div>
@@ -208,30 +211,50 @@ export default function ForgotPassword() {
       {/* STEP 3: New Password */}
       {step === 'reset' && (
         <form onSubmit={handleResetPassword}>
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative' }}>
             <label htmlFor="newPassword">New Password</label>
-            <input
-              type="password"
-              id="newPassword"
-              name="newPassword"
-              placeholder="••••••••"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              required
-            />
+            <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="newPassword"
+                  name="newPassword"
+                  placeholder="••••••••"
+                  style={{ color: 'var(--text-primary)' }}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                >
+                  {showPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+            </div>
             <span className="helper-text">Must be at least 8 characters.</span>
           </div>
-          <div className="form-group">
+          <div className="form-group" style={{ position: 'relative' }}>
             <label htmlFor="confirmPassword">Confirm Password</label>
-            <input
-              type="password"
-              id="confirmPassword"
-              name="confirmPassword"
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
+            <div style={{ position: 'relative' }}>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  placeholder="••••••••"
+                  style={{ color: 'var(--text-primary)' }}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+                <button 
+                  type="button" 
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+                >
+                  {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                </button>
+            </div>
           </div>
           <button type="submit" className="btn-primary" style={{marginTop: '1rem', width: '100%'}} disabled={loading}>
             {loading ? 'Resetting...' : 'Reset Password'}

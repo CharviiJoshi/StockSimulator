@@ -5,6 +5,7 @@ import {
   getSessionUser,
   clearSession,
   refreshActivity,
+  createSession,
 } from '../auth';
 
 const AuthContext = createContext(null);
@@ -45,6 +46,7 @@ export function AuthProvider({ children }) {
   }, [loading, user, location.pathname, navigate]);
 
   const login = (userData) => {
+    createSession(userData);
     setUser(userData);
   };
 

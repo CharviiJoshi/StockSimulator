@@ -101,11 +101,12 @@ export default function Register() {
             </div>
             <div className="form-group">
                 <label htmlFor="email">Email Address</label>
+                <input type="email" id="email" name="email" placeholder="you@gmail.com" required />
                 <input
                   type="email"
                   id="email"
                   name="email"
-                  placeholder="xyz@gmail.com"
+                  placeholder="you@gmail.com"
                   value={formData.email}
                   onChange={handleChange}
                   required
