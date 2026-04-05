@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 import bcrypt from 'bcryptjs';
 import '../index.css';
@@ -101,7 +101,6 @@ export default function Register() {
             </div>
             <div className="form-group">
                 <label htmlFor="email">Email Address</label>
-                <input type="email" id="email" name="email" placeholder="you@gmail.com" required />
                 <input
                   type="email"
                   id="email"
