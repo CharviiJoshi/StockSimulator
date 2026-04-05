@@ -79,9 +79,23 @@ function advanceDateStr(dateStr) {
 }
 
 function formatDateDisplay(dateStr) {
-    if (!dateStr) return "Not Started";
+    if (!dateStr) return ""; 
     const d = new Date(dateStr);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+// Fallback for old transactions without simDate
+function getFallbackDate(dayNum, startDate) {
+    if (!startDate) return "";
+    let d = new Date(startDate);
+    let tradingDay = 1;
+    while (tradingDay < dayNum) {
+        d.setDate(d.getDate() + 1);
+        if (d.getDay() !== 0 && d.getDay() !== 6) { // Skip weekends
+            tradingDay++;
+        }
+    }
+    return d.toISOString();
 }
 
 function fmt(n, decimals = 2) {
@@ -583,7 +597,7 @@ export default function Dashboard() {
                             <span className="day-number">{state.currentDay}</span>
                         </div>
                         <div className="topbar-date" style={{fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-muted)', marginRight: '0.5rem'}}>
-                            {state.isSimActive ? formatDateDisplay(state.currentDate) : 'Not Started'}
+                            {formatDateDisplay(state.currentDate || marketRange.min)}
                         </div>
                         <div className="topbar-metrics">
                             <div className="topbar-metric"><span className="tm-label">Net Worth</span><span className="tm-value">{fmt(calcNetWorth(state))}</span></div>
@@ -720,7 +734,7 @@ export default function Dashboard() {
                         </div>
                         <div className="card market-card">
                             <div className="card-header">
-                                <h3>Market Prices <span className="day-tag">Day {state.isSimActive ? formatDateDisplay(state.currentDate) : state.currentDay}</span></h3>
+                                <h3>Market Prices <span className="day-tag">{formatDateDisplay(state.currentDate || marketRange.min)}</span></h3>
                             </div>
                             <table className="market-table">
                                 <thead><tr><th>Symbol</th><th>Price</th><th>Day Chg</th><th>You Hold</th></tr></thead>
@@ -794,14 +808,15 @@ export default function Dashboard() {
                             <button className="btn-undo-ledger" onClick={undoLast} disabled={stateHistory.length === 0}>↩ Undo Last Trade</button>
                         </div>
                                 <table className="ledger-table">
-                                    <thead><tr><th>#</th><th>Day</th><th>Date</th><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Fee</th><th>Total</th></tr></thead>
+                                    <thead><tr><th>#</th><th>Date</th><th>Type</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Fee</th><th>Total</th></tr></thead>
                                     <tbody>
-                                        {state.transactions.length === 0 ? <tr className="empty-row"><td colSpan="9">No transactions yet.</td></tr> :
+                                        {state.transactions.length === 0 ? <tr className="empty-row"><td colSpan="8">No transactions yet.</td></tr> :
                                          [...state.transactions].reverse().map(t => (
                                             <tr key={t.id} style={t.isUndone ? { opacity: 0.5, textDecoration: 'line-through' } : {}}>
                                                 <td>{t.id}</td>
-                                                <td>Day {t.day}</td>
-                                                <td style={{fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)'}}>{formatDateDisplay(t.simDate)}</td>
+                                                <td style={{fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)'}}>
+                                                    {formatDateDisplay(t.simDate || getFallbackDate(t.day, marketRange.min))}
+                                                </td>
                                                 <td className={`ledger-${t.type.toLowerCase()}`}>{t.isUndone ? 'UNDONE' : t.type}</td>
                                                 <td className="ticker-cell">{t.sym}</td>
                                                 <td>{t.qty}</td>
