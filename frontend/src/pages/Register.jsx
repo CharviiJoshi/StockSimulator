@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { doc, getDoc, setDoc, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
 import bcrypt from 'bcryptjs';
 import '../index.css';
