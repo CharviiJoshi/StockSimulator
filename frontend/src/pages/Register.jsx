@@ -101,7 +101,6 @@ export default function Register() {
             </div>
             <div className="form-group">
                 <label htmlFor="email">Email Address</label>
-                <input type="email" id="email" name="email" placeholder="you@gmail.com" required />
                 <input
                   type="email"
                   id="email"
