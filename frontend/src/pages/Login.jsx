@@ -19,22 +19,54 @@ export default function Login() {
     e.preventDefault();
     setError('');
 
+    setLoading(true);
+
     if (isAdminMode) {
-      const ADMIN_EMAIL = 'admin@stocksimulator.com';
-      const ADMIN_PASSWORD = 'admin12345';
+      console.log('[LOGIN] 🔄 Attempting admin login for:', email);
+      try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where('email', '==', email), where('role', '==', 'admin'));
+        const querySnapshot = await getDocs(q);
 
-      if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-        setError('Invalid admin credentials.');
-        console.log('[LOGIN] ❌ Admin login failed — wrong credentials');
-        return;
+        if (querySnapshot.empty) {
+          setError('Invalid admin credentials.');
+          console.log('[LOGIN] ❌ Admin login failed — no admin account found for:', email);
+          setLoading(false);
+          return;
+        }
+
+        let adminUser = null;
+        let adminDocId = null;
+        querySnapshot.forEach((docSnap) => {
+          adminUser = docSnap.data();
+          adminDocId = docSnap.id;
+        });
+
+        const isPasswordCorrect = await bcrypt.compare(password, adminUser.password);
+
+        if (!isPasswordCorrect) {
+          setError('Invalid admin credentials.');
+          console.log('[LOGIN] ❌ Admin login failed — wrong password');
+          setLoading(false);
+          return;
+        }
+
+        console.log('[LOGIN] 🔐 Admin login successful');
+        await login({
+          email: adminUser.email,
+          name: adminUser.name,
+          role: 'admin',
+          userId: adminUser.userId || adminDocId,
+        });
+      } catch (err) {
+        console.error('[LOGIN] ❌ Admin login error:', err);
+        setError('An error occurred during admin login.');
+      } finally {
+        setLoading(false);
       }
-
-      console.log('[LOGIN] 🔐 Admin login successful');
-      await login({ email: ADMIN_EMAIL, role: 'admin', userId: 'admin' });
       return;
     }
 
-    setLoading(true);
     console.log('[LOGIN] 🔄 Attempting login for:', email);
 
     try {
