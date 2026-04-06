@@ -4,10 +4,12 @@ import Chart from 'chart.js/auto';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, addDoc, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from '../context/AuthContext';
+import { getAvailableAssets, getMarketRange, getHistoricalPrices } from '../csvService';
 import '../dashboard.css';
 
 // ── INITIAL STOCK DATA ──────────────────────────────────────
 let STOCKS = {};
+let csvFilesList = []; // Cached Firestore csvFiles metadata
 
 const FEE_RATE   = 0.005; // 0.5% per trade
 const START_CASH = 10000; // ₹10,000 starting cash
@@ -138,11 +140,25 @@ export default function Dashboard() {
     const [marketRange, setMarketRange] = useState({ min: "2020-01-01", max: "2026-03-19" });
     const [isDataLoaded, setIsDataLoaded] = useState(false);
 
+    // Helper: load CSV file metadata from Firestore
+    const loadCSVFiles = async () => {
+        try {
+            const snapshot = await getDocs(collection(db, 'csvFiles'));
+            const files = snapshot.docs
+                .map(d => d.data())
+                .filter(f => f.status === 'Active');
+            csvFilesList = files;
+            console.log('[DASHBOARD] Loaded', files.length, 'active CSV files from Firestore');
+            return files;
+        } catch (err) {
+            console.error('[DASHBOARD] Failed to load CSV files from Firestore:', err);
+            return [];
+        }
+    };
+
     const fetchPricesForDate = async (dateStr) => {
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/historical-prices?date=${dateStr}`);
-            const prices = await res.json();
-            return prices;
+            return await getHistoricalPrices(csvFilesList, dateStr);
         } catch (err) {
             console.error("Failed to fetch historical prices:", err);
             return null;
@@ -152,16 +168,17 @@ export default function Dashboard() {
     useEffect(() => {
         const initDashboard = async () => {
             try {
-                // 1. Fetch market date range
-                const rangeRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/market-range`);
-                const range = await rangeRes.json();
+                // 0. Load CSV file metadata from Firestore
+                const files = await loadCSVFiles();
+
+                // 1. Get market date range (parsed in-browser from Cloudinary CSVs)
+                const range = await getMarketRange(files);
                 setMarketRange(range);
                 setSimStartDate(range.min);
                 setSimEndDate(range.max);
 
-                // 2. Fetch real assets (symbols)
-                const assetsRes = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/available-assets`);
-                const realAssets = await assetsRes.json();
+                // 2. Get available assets (derived from Firestore csvFiles)
+                const realAssets = getAvailableAssets(files);
                 STOCKS = realAssets;
                 const symbols = Object.keys(realAssets);
                 if (symbols.length > 0 && !symbols.includes(tradeSymbol)) {

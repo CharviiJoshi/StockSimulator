@@ -1,29 +1,42 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import bcrypt from 'bcryptjs';
 import '../index.css';
 
 export default function Login() {
+  const { login } = useAuth();
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
 
     if (isAdminMode) {
-      navigate('/admin-dashboard');
+      const ADMIN_EMAIL = 'admin@stocksimulator.com';
+      const ADMIN_PASSWORD = 'admin12345';
+
+      if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+        setError('Invalid admin credentials.');
+        console.log('[LOGIN] ❌ Admin login failed — wrong credentials');
+        return;
+      }
+
+      console.log('[LOGIN] 🔐 Admin login successful');
+      await login({ email: ADMIN_EMAIL, role: 'admin', userId: 'admin' });
       return;
     }
 
     setLoading(true);
+    console.log('[LOGIN] 🔄 Attempting login for:', email);
+
     try {
       // 1. Look for the user by email in the "users" collection
       const usersRef = collection(db, 'users');
@@ -31,6 +44,7 @@ export default function Login() {
       const querySnapshot = await getDocs(q);
 
       if (querySnapshot.empty) {
+        console.log('[LOGIN] ❌ No account found for:', email);
         setError('No account found with this email.');
         setLoading(false);
         return;
@@ -38,19 +52,31 @@ export default function Login() {
 
       // 2. We found a user, check their password
       let matchedUser = null;
-      querySnapshot.forEach((doc) => {
-        matchedUser = doc.data();
+      let matchedDocId = null;
+      querySnapshot.forEach((docSnap) => {
+        matchedUser = docSnap.data();
+        matchedDocId = docSnap.id;
       });
 
       const isPasswordCorrect = await bcrypt.compare(password, matchedUser.password);
 
       if (isPasswordCorrect) {
-        navigate('/dashboard');
+        console.log('[LOGIN] ✅ Password correct for:', email);
+        // Build user data and use AuthContext login (creates token + stores in Firestore)
+        const userData = {
+          userId: matchedUser.userId || matchedDocId,
+          name: matchedUser.name,
+          email: matchedUser.email,
+          role: 'user',
+        };
+        await login(userData);
+        // login() in AuthContext will navigate to /dashboard
       } else {
+        console.log('[LOGIN] ❌ Incorrect password for:', email);
         setError('Incorrect password.');
       }
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('[LOGIN] ❌ Login error:', err);
       setError('An error occurred during login.');
     } finally {
       setLoading(false);

@@ -1,13 +1,14 @@
 import os
-import shutil
+import io
 import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import pandas as pd
-from fastapi import FastAPI, UploadFile, File, HTTPException, Body, BackgroundTasks
+import requests as http_requests
+from fastapi import FastAPI, HTTPException, Body, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
@@ -25,16 +26,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Create the folder where CSVs will live
-UPLOAD_DIR = "app/data/market_history"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
 # In-memory storage for OTPs (In production, use Redis or a DB)
 otp_storage: Dict[str, str] = {}
 
-# Gmail Configuration (Ideally from .env)
+# In-memory CSV cache: { symbol: { "df": DataFrame, "url": str, "cached_at": timestamp } }
+csv_cache: Dict[str, dict] = {}
+CACHE_TTL_SECONDS = 300  # 5 minutes
+
+# Gmail Configuration
 GMAIL_USER = os.getenv("GMAIL_USER", "technicalreport24@gmail.com")
 GMAIL_PASS = os.getenv("GMAIL_PASS", "ibtj itoi mpfj aysh")
+
 
 class OTPRequest(BaseModel):
     email: str
@@ -43,109 +45,117 @@ class OTPVerify(BaseModel):
     email: str
     otp: str
 
-@app.post("/api/admin/upload-csv")
-async def upload_market_data(file: UploadFile = File(...)):
-    # 1. Define where to save the incoming file
-    file_location = os.path.join(UPLOAD_DIR, file.filename)
-    
-    # 2. Save it to your hard drive
-    try:
-        with open(file_location, "wb+") as file_object:
-            shutil.copyfileobj(file.file, file_object)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {str(e)}")
+class CSVFileInfo(BaseModel):
+    symbol: str
+    cloudinaryUrl: str
+    status: Optional[str] = "Active"
 
-            # 3. Pandas Auto-Clean Validation Logic
+class CSVFilesPayload(BaseModel):
+    files: List[CSVFileInfo]
+
+
+# ── Helper: Download and cache a CSV from Cloudinary ─────────
+
+import time
+
+def fetch_csv_from_url(symbol: str, url: str, force_refresh: bool = False) -> Optional[pd.DataFrame]:
+    """Download a CSV from Cloudinary URL, with in-memory caching."""
+    now = time.time()
+
+    if not force_refresh and symbol in csv_cache:
+        cached = csv_cache[symbol]
+        if cached["url"] == url and (now - cached["cached_at"]) < CACHE_TTL_SECONDS:
+            return cached["df"]
+
     try:
-        warnings = []
-        df = pd.read_csv(file_location)
-        
-        # FIX 1: Strip invisible spaces from headers (e.g. "Close " -> "Close")
-        original_cols = list(df.columns)
+        response = http_requests.get(url, timeout=30)
+        response.raise_for_status()
+        df = pd.read_csv(io.StringIO(response.text))
         df.columns = df.columns.str.strip()
-        if list(df.columns) != original_cols:
-            warnings.append("Automatically stripped invisible spaces from headers.")
-        
-        # RULE A: Missing Crucial Columns (Fatal Error)
-        required_columns = ["Date", "Open", "High", "Low", "Close", "Volume"]
-        missing_cols = [col for col in required_columns if col not in df.columns]
-        
-        if missing_cols:
-            os.remove(file_location)
-            raise HTTPException(status_code=400, detail=f"FATAL: Missing required columns: {missing_cols}")
-        
-        # FIX 2: Delete corrupted rows (like "0.26 Dividend" strings or blanks)
-        original_row_count = len(df)
-        df = df.dropna(subset=required_columns) # Auto-deletes any row missing math values
-        
-        rows_deleted = original_row_count - len(df)
-        if rows_deleted > 0:
-            warnings.append(f"Auto-deleted {rows_deleted} corrupted or blank rows.")
-            
-        # Optional Rule C: Sort chronologically 
-        # df['Date'] = pd.to_datetime(df['Date'])
-        # df = df.sort_values(by="Date")
-            
-        # Save the freshly scrubbed DataFrame back over the file
-        df.to_csv(file_location, index=False)
+        df['Date'] = pd.to_datetime(df['Date'])
 
-    except HTTPException:
-        raise # Let the 400 Fatal Error pass through
+        csv_cache[symbol] = {
+            "df": df,
+            "url": url,
+            "cached_at": now,
+        }
+        print(f"[BACKEND] Cached CSV for {symbol} ({len(df)} rows)")
+        return df
     except Exception as e:
-        if os.path.exists(file_location):
-            os.remove(file_location)
-        raise HTTPException(status_code=400, detail=f"Pandas failed to read CSV. Error: {str(e)}")
+        print(f"[BACKEND] Error fetching CSV for {symbol}: {e}")
+        return None
 
-    return {
-        "status": "success", 
-        "filename": file.filename, 
-        "message": "File scrubbed and saved!",
-        "admin_warnings": warnings
-    }
 
-@app.get("/api/available-assets")
-def get_available_assets():
-    """Dynamically reads the uploaded CSVs and gives them to the User Dashboard"""
+# ── API: Available Assets ────────────────────────────────────
+
+@app.post("/api/available-assets")
+def get_available_assets(payload: CSVFilesPayload):
+    """Returns asset info for all active CSV files (sent from frontend via Firestore)."""
     assets = {}
-    
-    if not os.path.exists(UPLOAD_DIR):
-        return assets
-        
-    for filename in os.listdir(UPLOAD_DIR):
-        if filename.endswith(".csv"):
-            symbol = filename.replace("(in)", "").replace(".csv", "").upper()
-            assets[symbol] = {
-                "name": f"{symbol} Stock",
-                "price": 0.0 # Price will be synced by date in the frontend
+    for f in payload.files:
+        if f.status == "Active":
+            assets[f.symbol] = {
+                "name": f"{f.symbol} Stock",
+                "price": 0.0
             }
-            
     return assets
 
-@app.get("/api/market-range")
-def get_market_range():
-    """Returns the absolute min and max dates found across all uploaded CSVs"""
+
+# ── API: Market Date Range ───────────────────────────────────
+
+@app.post("/api/market-range")
+def get_market_range(payload: CSVFilesPayload):
+    """Returns the min/max dates across all active CSV files."""
     all_dates = []
-    
-    if not os.path.exists(UPLOAD_DIR):
-        return {"min": "2020-01-01", "max": "2026-03-19"} # Default range
-        
-    for filename in os.listdir(UPLOAD_DIR):
-        if filename.endswith(".csv"):
-            file_path = os.path.join(UPLOAD_DIR, filename)
-            try:
-                df = pd.read_csv(file_path)
-                df['Date'] = pd.to_datetime(df['Date'])
-                all_dates.extend(df['Date'].tolist())
-            except Exception:
-                continue
-                
+
+    for f in payload.files:
+        if f.status != "Active":
+            continue
+        df = fetch_csv_from_url(f.symbol, f.cloudinaryUrl)
+        if df is not None and 'Date' in df.columns:
+            all_dates.extend(df['Date'].tolist())
+
     if not all_dates:
         return {"min": "2020-01-01", "max": "2026-03-19"}
-        
+
     return {
         "min": min(all_dates).strftime('%Y-%m-%d'),
         "max": max(all_dates).strftime('%Y-%m-%d')
     }
+
+
+# ── API: Historical Prices ──────────────────────────────────
+
+@app.post("/api/historical-prices")
+def get_historical_prices(date: str, payload: CSVFilesPayload):
+    """Returns Close prices for all active stocks on the given date."""
+    prices = {}
+    try:
+        target_date = pd.to_datetime(date)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    for f in payload.files:
+        if f.status != "Active":
+            continue
+        df = fetch_csv_from_url(f.symbol, f.cloudinaryUrl)
+        if df is None:
+            continue
+
+        try:
+            exact_row = df[df['Date'] == target_date]
+            if not exact_row.empty:
+                row = exact_row.iloc[0]
+                close_col = [col for col in list(df.columns) if "Close" in col][0]
+                prices[f.symbol] = float(row[close_col])
+        except Exception as e:
+            print(f"[BACKEND] Error reading {f.symbol}: {e}")
+            continue
+
+    return prices
+
+
+# ── API: OTP ─────────────────────────────────────────────────
 
 def send_email_task(email: str, otp: str):
     """Background task to send OTP emails without blocking the main request"""
@@ -154,10 +164,10 @@ def send_email_task(email: str, otp: str):
         msg['From'] = GMAIL_USER
         msg['To'] = email
         msg['Subject'] = "Your Stock Simulator OTP"
-        
+
         body = f"Your one-time password for resetting your Stock Simulator password is: {otp}. It will expire soon."
         msg.attach(MIMEText(body, 'plain'))
-        
+
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login(GMAIL_USER, GMAIL_PASS)
@@ -168,96 +178,23 @@ def send_email_task(email: str, otp: str):
     except Exception as e:
         print(f"Background Email Error: {str(e)}")
 
-@app.get("/api/historical-prices")
-def get_historical_prices(date: str):
-    """Returns prices for all assets on the requested date exactly"""
-    prices = {}
-    try:
-        target_date = pd.to_datetime(date)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-
-    if not os.path.exists(UPLOAD_DIR):
-        return prices
-
-    for filename in os.listdir(UPLOAD_DIR):
-        if filename.endswith(".csv"):
-            symbol = filename.replace("(in)", "").replace(".csv", "").upper()
-            file_path = os.path.join(UPLOAD_DIR, filename)
-            
-            try:
-                df = pd.read_csv(file_path)
-                df['Date'] = pd.to_datetime(df['Date'])
-                
-                # Filter for the exact date
-                exact_row = df[df['Date'] == target_date]
-                if not exact_row.empty:
-                    row = exact_row.iloc[0]
-                    close_col = [col for col in list(df.columns) if "Close" in col][0]
-                    prices[symbol] = float(row[close_col])
-                # If NOT found, we don't add it to 'prices'. 
-                # This will signal 'NA' to the frontend.
-                    
-            except Exception as e:
-                print(f"Error reading {filename}: {e}")
-                continue
-                
-    return prices
-
 @app.post("/api/send-otp")
 async def send_otp(request: OTPRequest, background_tasks: BackgroundTasks):
     email = request.email
     otp = str(random.randint(100000, 999999))
     otp_storage[email] = otp
-    
-    # Send Email in background
+
     background_tasks.add_task(send_email_task, email, otp)
-    
+
     return {"message": "OTP initiated successfully"}
 
 @app.post("/api/verify-otp")
 async def verify_otp(request: OTPVerify):
     email = request.email
     otp = request.otp
-    
+
     if email in otp_storage and otp_storage[email] == otp:
-        del otp_storage[email] # Clear after use
+        del otp_storage[email]
         return {"message": "OTP verified successfully"}
     else:
         raise HTTPException(status_code=400, detail="Invalid or expired OTP")
-
-@app.get("/api/admin/list-csvs")
-def list_csvs():
-    """Lists all uploaded CSV files and their metadata"""
-    files = []
-    if not os.path.exists(UPLOAD_DIR):
-        return files
-        
-    for filename in os.listdir(UPLOAD_DIR):
-        if filename.endswith(".csv"):
-            file_path = os.path.join(UPLOAD_DIR, filename)
-            stats = os.stat(file_path)
-            try:
-                df = pd.read_csv(file_path)
-                records = len(df)
-            except Exception:
-                records = 0
-                
-            files.append({
-                "id": filename,
-                "name": filename,
-                "date": pd.to_datetime(stats.st_mtime, unit='s').strftime('%Y-%m-%d %H:%M'),
-                "size": f"{stats.st_size / 1024:.1f} KB",
-                "records": records,
-                "status": "Active" # Can be extended
-            })
-    return files
-
-@app.delete("/api/admin/delete-csv/{filename}")
-def delete_csv(filename: str):
-    file_path = os.path.join(UPLOAD_DIR, filename)
-    if os.path.exists(file_path):
-        os.remove(file_path)
-        return {"message": f"File {filename} deleted successfully"}
-    raise HTTPException(status_code=404, detail="File not found")
-

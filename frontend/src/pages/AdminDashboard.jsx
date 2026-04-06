@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { collection, query, where, getDocs, doc, setDoc, runTransaction } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, deleteDoc, updateDoc, runTransaction } from 'firebase/firestore';
 import { db } from '../firebase';
+import { useAuth } from '../context/AuthContext';
 import bcrypt from 'bcryptjs';
 import '../dashboard.css';
 
+const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dz9o6gddm';
+
 export default function AdminDashboard() {
+  const { logout } = useAuth();
   const [activeSection, setActiveSection] = useState('csv-management');
   const [theme, setTheme] = useState(localStorage.getItem('stocksim-theme') || 'dark');
   const [notification, setNotification] = useState({ text: '', isError: false, visible: false });
@@ -13,6 +17,7 @@ export default function AdminDashboard() {
   const [files, setFiles] = useState([]);
   const [admins, setAdmins] = useState([]);
   const [loadingAdmins, setLoadingAdmins] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [newAdmin, setNewAdmin] = useState({ name: '', email: '', password: '' });
 
   useEffect(() => {
@@ -22,15 +27,16 @@ export default function AdminDashboard() {
     fetchAdmins();
   }, [theme]);
 
+  // ── Fetch CSV files from Firestore ──────────────────────────
   const fetchFiles = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/admin/list-csvs`);
-      if (response.ok) {
-        const data = await response.json();
-        setFiles(data);
-      }
+      const snapshot = await getDocs(collection(db, 'csvFiles'));
+      const fileList = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      fileList.sort((a, b) => (a.symbol || '').localeCompare(b.symbol || ''));
+      setFiles(fileList);
+      console.log('[ADMIN] Loaded', fileList.length, 'CSV files from Firestore');
     } catch (err) {
-      console.error('Failed to fetch files:', err);
+      console.error('[ADMIN] Failed to fetch files from Firestore:', err);
     }
   };
 
@@ -54,67 +60,146 @@ export default function AdminDashboard() {
     setTimeout(() => setNotification(n => ({ ...n, visible: false })), 3500);
   };
 
-  const handleToggleStatus = (id) => {
-    setFiles(files.map(f => {
-      if (f.id === id) {
-        const newStatus = f.status === 'Active' ? 'Inactive' : 'Active';
-        showNotification(`File marked as ${newStatus}`);
-        return { ...f, status: newStatus };
-      }
-      return f;
-    }));
-  };
+  // ── CSV Validation (client-side) ────────────────────────────
+  const validateCSV = (text) => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return { valid: false, error: 'File has no data rows.' };
 
-  const handleDelete = async (filename) => {
-    try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/admin/delete-csv/${filename}`, {
-        method: 'DELETE'
-      });
-      if (response.ok) {
-        showNotification('File successfully deleted', true);
-        fetchFiles();
-      }
-    } catch (err) {
-      showNotification('Failed to delete file', true);
+    const headers = lines[0].split(',').map(h => h.trim());
+    const required = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume'];
+    const missing = required.filter(r => !headers.includes(r));
+
+    if (missing.length > 0) {
+      return { valid: false, error: `Missing required columns: ${missing.join(', ')}` };
     }
+
+    return { valid: true, records: lines.length - 1 };
   };
 
-    const handleUpload = async (e) => {
+  // ── Upload CSV to Cloudinary + save metadata to Firestore ───
+  const handleUpload = async (e) => {
     e.preventDefault();
-    
+
     const fileInput = e.target.querySelector('input[type="file"]');
     const file = fileInput.files[0];
-    
+
     if (!file) {
       showNotification('Please select a file first.', true);
       return;
     }
 
-    const formData = new FormData();
-    formData.append('file', file);
+    if (!file.name.endsWith('.csv')) {
+      showNotification('Only CSV files are allowed.', true);
+      return;
+    }
+
+    setUploading(true);
 
     try {
-      showNotification("Sending to Pandas Engine for validation...");
-      
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/admin/upload-csv`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.detail || 'Upload failed');
+      // 1. Read and validate CSV content
+      showNotification('Validating CSV headers...');
+      const text = await file.text();
+      const validation = validateCSV(text);
+
+      if (!validation.valid) {
+        showNotification(`Validation failed: ${validation.error}`, true);
+        setUploading(false);
+        return;
       }
-      
-      showNotification('CSV Validation Passed & Saved to Hard Drive!');
+
+      // 2. Upload to Cloudinary with signed upload
+      showNotification('Uploading to Cloudinary...');
+      const timestamp = Math.round(Date.now() / 1000);
+      const folder = 'stock-csvs';
+      const apiKey = '651894386886899';
+      const apiSecret = 'znkWCfKNvFXXf1Nqo1lx9Qstzcs';
+
+      // Generate SHA-1 signature
+      const paramsStr = `folder=${folder}&timestamp=${timestamp}${apiSecret}`;
+      const msgBuffer = new TextEncoder().encode(paramsStr);
+      const hashBuffer = await crypto.subtle.digest('SHA-1', msgBuffer);
+      const signature = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', apiKey);
+      formData.append('timestamp', timestamp);
+      formData.append('signature', signature);
+      formData.append('folder', folder);
+
+      const cloudRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`,
+        { method: 'POST', body: formData }
+      );
+
+      if (!cloudRes.ok) {
+        const errData = await cloudRes.json();
+        throw new Error(errData.error?.message || 'Cloudinary upload failed');
+      }
+
+      const cloudData = await cloudRes.json();
+      console.log('[ADMIN] Cloudinary upload success:', cloudData.secure_url);
+
+      // 3. Derive symbol from filename (e.g., "AAPL.csv" → "AAPL", "GOOGL(in).csv" → "GOOGL")
+      const symbol = file.name
+        .replace(/\(in\)/gi, '')
+        .replace(/\.csv$/i, '')
+        .trim()
+        .toUpperCase();
+
+      // 4. Save metadata to Firestore csvFiles collection
+      const csvDoc = {
+        symbol,
+        filename: file.name,
+        cloudinaryUrl: cloudData.secure_url,
+        cloudinaryPublicId: cloudData.public_id,
+        uploadedAt: new Date().toISOString(),
+        records: validation.records,
+        size: `${(file.size / 1024).toFixed(1)} KB`,
+        status: 'Active',
+      };
+
+      await setDoc(doc(db, 'csvFiles', symbol), csvDoc);
+      console.log('[ADMIN] Saved CSV metadata to Firestore:', symbol);
+
+      showNotification(`✅ ${symbol}.csv uploaded & saved successfully!`);
+      fileInput.value = '';
       fetchFiles();
-      
     } catch (error) {
+      console.error('[ADMIN] Upload error:', error);
       showNotification(`Error: ${error.message}`, true);
+    } finally {
+      setUploading(false);
     }
   };
 
+  // ── Toggle status in Firestore ──────────────────────────────
+  const handleToggleStatus = async (id) => {
+    const file = files.find(f => f.id === id);
+    if (!file) return;
+
+    const newStatus = file.status === 'Active' ? 'Inactive' : 'Active';
+    try {
+      await updateDoc(doc(db, 'csvFiles', id), { status: newStatus });
+      showNotification(`File marked as ${newStatus}`);
+      setFiles(files.map(f => f.id === id ? { ...f, status: newStatus } : f));
+    } catch (err) {
+      showNotification('Failed to update status', true);
+    }
+  };
+
+  // ── Delete from Firestore ───────────────────────────────────
+  const handleDelete = async (id) => {
+    try {
+      await deleteDoc(doc(db, 'csvFiles', id));
+      showNotification('File record deleted from database');
+      fetchFiles();
+    } catch (err) {
+      showNotification('Failed to delete file', true);
+    }
+  };
+
+  // ── Add Admin ───────────────────────────────────────────────
   const handleAddAdmin = async (e) => {
     e.preventDefault();
     const { name, email, password } = newAdmin;
@@ -127,7 +212,6 @@ export default function AdminDashboard() {
     try {
       showNotification('Creating new administrator...');
 
-      // 1. Check if email exists
       const usersRef = collection(db, 'users');
       const q = query(usersRef, where('email', '==', email));
       const snapshot = await getDocs(q);
@@ -137,11 +221,9 @@ export default function AdminDashboard() {
         return;
       }
 
-      // 2. Hash password
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      // 3. Get next ID and save (Single Transaction)
       const counterRef = doc(db, 'counters', 'users');
 
       await runTransaction(db, async (transaction) => {
@@ -199,10 +281,10 @@ export default function AdminDashboard() {
         </nav>
 
         <div className="sidebar-footer">
-          <Link to="/login" className="nav-item logout-btn">
+          <a href="#" className="nav-item logout-btn" onClick={(e) => { e.preventDefault(); logout(); }}>
             <span className="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg></span>
             <span>Log Out</span>
-          </Link>
+          </a>
         </div>
       </aside>
 
@@ -212,7 +294,7 @@ export default function AdminDashboard() {
         {/* TOPBAR */}
         <header className="topbar" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '0.9rem 2rem' }}>
           <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text)' }}>
-            {activeSection === 'csv-management' ? 'Data Management' : 
+            {activeSection === 'csv-management' ? 'Data Management' :
              activeSection === 'admin-management' ? 'Admin Management' : 'Data Registry'}
           </div>
           <div className="topbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -240,7 +322,7 @@ export default function AdminDashboard() {
           <div className="card" style={{ width: '100%', maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
             <div className="card-header">
               <h3>Upload New Market Data</h3>
-              <span className="card-badge">Strict Validation</span>
+              <span className="card-badge">Cloudinary + Firebase</span>
             </div>
             <form onSubmit={handleUpload} className="trade-form" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
               <div className="form-row" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -249,9 +331,12 @@ export default function AdminDashboard() {
               </div>
               <div className="trade-info-box" style={{ marginTop: '1.5rem' }}>
                 <div className="tib-row"><span>Required Headers</span><span>Date, Open, High, Low, Close, Volume</span></div>
-                <div className="tib-row fee-row" style={{ color: 'var(--amber)' }}><span>Note: Gaps or missing data will trigger validation error.</span></div>
+                <div className="tib-row"><span>Storage</span><span>Cloudinary (raw) + Firebase metadata</span></div>
+                <div className="tib-row fee-row" style={{ color: 'var(--amber)' }}><span>Symbol is derived from filename (e.g. AAPL.csv → AAPL)</span></div>
               </div>
-              <button type="submit" className="btn-execute" style={{ marginTop: '1rem', padding: '1rem', fontSize: '1.1rem' }}>Verify & Upload CSV</button>
+              <button type="submit" className="btn-execute" disabled={uploading} style={{ marginTop: '1rem', padding: '1rem', fontSize: '1.1rem' }}>
+                {uploading ? 'Uploading...' : 'Verify & Upload CSV'}
+              </button>
             </form>
           </div>
         </section>
@@ -268,35 +353,35 @@ export default function AdminDashboard() {
               <form onSubmit={handleAddAdmin} className="trade-form">
                 <div className="form-row">
                   <label>Full Name</label>
-                  <input 
-                    type="text" 
-                    className="trade-input" 
-                    placeholder="Enter name" 
+                  <input
+                    type="text"
+                    className="trade-input"
+                    placeholder="Enter name"
                     value={newAdmin.name}
                     onChange={(e) => setNewAdmin({ ...newAdmin, name: e.target.value })}
-                    required 
+                    required
                   />
                 </div>
                 <div className="form-row">
                   <label>Email Address</label>
-                  <input 
-                    type="email" 
-                    className="trade-input" 
-                    placeholder="admin@example.com" 
+                  <input
+                    type="email"
+                    className="trade-input"
+                    placeholder="admin@example.com"
                     value={newAdmin.email}
                     onChange={(e) => setNewAdmin({ ...newAdmin, email: e.target.value })}
-                    required 
+                    required
                   />
                 </div>
                 <div className="form-row">
                   <label>Password</label>
-                  <input 
-                    type="password" 
-                    className="trade-input" 
-                    placeholder="••••••••" 
+                  <input
+                    type="password"
+                    className="trade-input"
+                    placeholder="••••••••"
                     value={newAdmin.password}
                     onChange={(e) => setNewAdmin({ ...newAdmin, password: e.target.value })}
-                    required 
+                    required
                   />
                 </div>
                 <div className="trade-info-box" style={{ marginTop: '0.5rem' }}>
@@ -365,6 +450,7 @@ export default function AdminDashboard() {
               <table className="ledger-table">
                 <thead>
                   <tr>
+                    <th>Symbol</th>
                     <th>File Name</th>
                     <th>Uploaded On</th>
                     <th>Size</th>
@@ -375,14 +461,15 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody>
                   {files.length === 0 ? (
-                    <tr className="empty-row"><td colSpan="6">No CSV files found in the system.</td></tr>
+                    <tr className="empty-row"><td colSpan="7">No CSV files found. Upload data from the CSV Data tab.</td></tr>
                   ) : (
                     files.map(file => (
                       <tr key={file.id}>
-                        <td className="ticker-cell" style={{ color: 'var(--cyan)' }}>{file.name}</td>
-                        <td>{file.date}</td>
+                        <td className="ticker-cell" style={{ color: 'var(--cyan)' }}>{file.symbol}</td>
+                        <td>{file.filename}</td>
+                        <td>{file.uploadedAt ? new Date(file.uploadedAt).toLocaleDateString() : '—'}</td>
                         <td>{file.size}</td>
-                        <td>{file.records.toLocaleString()}</td>
+                        <td>{(file.records || 0).toLocaleString()}</td>
                         <td>
                           <span className="ach-tag" style={{
                             background: file.status === 'Active' ? 'rgba(16,185,129,0.15)' : 'rgba(244,63,94,0.15)',

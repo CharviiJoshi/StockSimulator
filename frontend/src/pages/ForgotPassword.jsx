@@ -29,7 +29,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/send-otp`, {
+      const response = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
@@ -69,7 +69,7 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/verify-otp`, {
+      const response = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp: otpInput }),

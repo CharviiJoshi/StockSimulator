@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Landing from './pages/Landing';
 import Home from './pages/Home';
@@ -11,14 +11,24 @@ import EditProfile from './pages/EditProfile';
 import ForgotPassword from './pages/ForgotPassword';
 import './index.css';
 
+function RouteLogger() {
+  const location = useLocation();
+  React.useEffect(() => {
+    console.log(`[APP] 🗺️ Route rendered: ${location.pathname}${location.search}${location.hash}`);
+  }, [location]);
+  return null;
+}
+
 function App() {
   React.useEffect(() => {
     const savedTheme = localStorage.getItem('stocksim-theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
+    console.log('[APP] 🚀 App initialized | Theme:', savedTheme);
   }, []);
 
   return (
     <Router>
+      <RouteLogger />
       <AuthProvider>
         <Routes>
           <Route path="/" element={<Landing />} />

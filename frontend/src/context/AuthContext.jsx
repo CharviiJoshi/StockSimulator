@@ -6,6 +6,7 @@ import {
   clearSession,
   refreshActivity,
   createSession,
+  validateTokenWithDB,
 } from '../auth';
 
 const AuthContext = createContext(null);
@@ -19,17 +20,34 @@ export function AuthProvider({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Auto-login: check token on app load
+  // Auto-login: check token on app load and validate against Firestore
   useEffect(() => {
-    if (isSessionValid()) {
-      const sessionUser = getSessionUser();
-      if (sessionUser) {
-        setUser(sessionUser);
-        refreshActivity();
+    const checkSession = async () => {
+      console.log('[ROUTER] 🔄 Checking existing session on app load...');
+      if (isSessionValid()) {
+        // Token exists locally and isn't expired — now validate against Firestore
+        console.log('[ROUTER] 🔍 Local session found, validating with Firestore...');
+        const validatedUser = await validateTokenWithDB();
+        if (validatedUser) {
+          setUser(validatedUser);
+          refreshActivity();
+          console.log('[ROUTER] ✅ Auto-login successful for:', validatedUser.email || validatedUser.name);
+        } else {
+          console.log('[ROUTER] ❌ Token validation failed — user must login again');
+          setUser(null);
+        }
+      } else {
+        console.log('[ROUTER] ⚠️ No valid local session — user must login');
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+    checkSession();
   }, []);
+
+  // Log every route change
+  useEffect(() => {
+    console.log(`[ROUTER] 📍 Route changed to: ${location.pathname} | Authenticated: ${!!user} | User: ${user?.email || 'none'}`);
+  }, [location.pathname, user]);
 
   // Refresh activity timestamp on every route change
   useEffect(() => {
@@ -41,18 +59,35 @@ export function AuthProvider({ children }) {
   // Redirect unauthenticated users away from protected pages
   useEffect(() => {
     if (!loading && !user && !PUBLIC_ROUTES.includes(location.pathname)) {
+      console.log(`[ROUTER] 🚫 Unauthenticated access to ${location.pathname} — redirecting to /login`);
       navigate('/login');
     }
   }, [loading, user, location.pathname, navigate]);
 
-  const login = (userData) => {
-    createSession(userData);
+  // Redirect authenticated users away from login/register to dashboard
+  // Redirect authenticated users away from login/register to their dashboard
+  useEffect(() => {
+    if (!loading && user && (location.pathname === '/login' || location.pathname === '/register')) {
+      const target = user.role === 'admin' ? '/admin-dashboard' : '/dashboard';
+      console.log(`[ROUTER] ↩️ Authenticated user on ${location.pathname} — redirecting to ${target}`);
+      navigate(target);
+    }
+  }, [loading, user, location.pathname, navigate]);
+
+  const login = async (userData) => {
+    console.log('[ROUTER] 🔐 Login initiated for user:', userData.email || userData.name);
+    await createSession(userData);
     setUser(userData);
+    const target = userData.role === 'admin' ? '/admin-dashboard' : '/dashboard';
+    console.log(`[ROUTER] ✅ Login complete — navigating to ${target}`);
+    navigate(target);
   };
 
-  const logout = () => {
-    clearSession();
+  const logout = async () => {
+    console.log('[ROUTER] 🚪 Logout initiated');
+    await clearSession();
     setUser(null);
+    console.log('[ROUTER] ✅ Logout complete — navigating to /login');
     navigate('/login');
   };
 
